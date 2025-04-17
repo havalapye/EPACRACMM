@@ -21,6 +21,14 @@ Nash Skipper - updates for CRACMM2
     8. Add V or A to the start of ROC* species to indicate gas or particle phase.
     9. Add warning if input was not mapped to a CRACMM species (mapped to UNKCRACMM).
 
+Havala Pye - draft CRACMM3
+    Notes: CRACMM2 and CRACMM3 inputs are fully cross compatible
+    1. Recast NAPH as explicit naphthalene rather than naphthalene and PAHs. 
+       Move PAHs to ROCP5ARO and ROCP6ARO.
+    2. Add optional argument for CRACMM version (meant for CRACMM3M).
+    3. Add CRACMM3M species CH3I.
+    4. Make phenol explicit PHEN.
+
 """
 
 import warnings
@@ -30,7 +38,7 @@ from rdkit.Chem import Fragments
 from rdkit.Chem import rdMolDescriptors
 from rdkit.Chem import AllChem
 
-def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None):
+def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None,mechanism=None):
     '''
     This function is part of CRACMM
     
@@ -45,7 +53,12 @@ def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None):
     :returns: mechspecies (string) 
     '''
     
-    # CRACMM2
+    # CRACMM3 options: currently CRACMM3 and CRACMM3M are only options, CRACMM3 is the default behavior
+    try:
+        assert mechanism in ['CRACMM3', 'CRACMM3M', None]
+    except AssertionError as e:
+        err_msg = f'Invalid mechanism option {phase} supplied. Valid options are "CRACMM3", "CRACMM3M", or None (which defaults to CRACMM3 behavior).'
+        raise Exception(err_msg).with_traceback(e.__traceback__)
 
     # Prep inputs
     if smiles_input == '-':
@@ -94,6 +107,10 @@ def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None):
     #namine = smiles_upper.count('CN') + smiles_upper.count('NC') + smiles_upper.count('C(N') + smiles_upper.count('N(C')
     tfmonoterpene = (nC == 10 and nH == 18 and nO == 1) or (nC == 10 and nH == 16) 
 
+    # Species unique to CRACMM3M
+    if mechanism =='CRACMM3M': 
+        if ( smiles == 'CI'):         mechspecies = 'CH3I'
+
     # Mapper is for ROC only and not elemental carbon
     if   ( nC <= 0 ):                 mechspecies = 'UNKCRACMM'
     elif ( smiles == '[C]' ):         mechspecies = 'UNKCRACMM'
@@ -126,6 +143,8 @@ def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None):
     elif ( smiles == 'Cc1ccccc1' ):   mechspecies = 'TOL'   # toluene
     elif ( smiles == 'C=CC=C' ):      mechspecies = 'BDE13' # 1,3 butadiene   
     elif ( smiles == 'C=CC=O' ):      mechspecies = 'ACRO'  # acrolein
+    elif ( smiles == 'C1=CC2=CC=CC=C2C=C1' ):  mechspecies = 'NAPH'  # naphthalene
+    elif ( smiles == 'OC1=CC=CC=C1' ):         mechspecies = 'PHEN'  # phenol
 
     # Glyoxal and glycoaldehyde (here due to solubility alt mappings: ACD, ETEG)
     elif ( nC==2 and nO==2 and naldehyde>=1 ):     
@@ -143,10 +162,6 @@ def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None):
 
     # Furans and dienes other than 1,3 BDE
     elif ( nfuran > 0 ):               mechspecies = 'FURAN' # furans and other dienes
-
-    # Multi-ring aromatics (PAH and NAPH can be collapsed together if necessary)  
-    # elif ( nbenzene >= 1 and log10cstar < 3.5 and (nO/nC) == 0 ): mechspecies = 'PAH'  # PAH and other lower-volatility aromatics (v0.1)
-    elif ( nbenzene > 1 and nO/nC == 0 ): mechspecies = 'NAPH' # Naphthalene-like, PAH with 2 rings
 
     # SVOC species binned
     elif ( log10cstar < -1.5 ): # C* bin centered on 0.01 ug/m3 
@@ -191,10 +206,12 @@ def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None):
     elif ( nbenzene > 0 ): # Single-ring aromatics
         if ( naldehyde > 0 ):                mechspecies = 'BALD'     # Benzaldehyde and arom. aldehydes
         elif ( nC>=7 and nalcohol>=2 ):      mechspecies = 'MCT'      # methylcatechol
-        elif ( nC>=7 and nalcohol>=1 ):      mechspecies = 'CSL'      # cresol
-        elif ( nC==6 and nalcohol>=1 ):      mechspecies = 'PHEN'     # phenol
+        elif ( nalcohol>=1 ):                mechspecies = 'CSL'      # cresol
         elif ( log10cstar < 5.5 ):           mechspecies = 'VROCP5ARO' # C* bin centered on 10^5 (v0.1)
         elif ( log10cstar < 6.5 ):           mechspecies = 'VROCP6ARO' # C* bin centered on 10^6 (v0.1)
+        elif ( nbenzene > 1  ): 
+            if ( log10cstar < 5.5 ):         mechspecies = 'VROCP5ARO' # C* bin centered on 10^5 (v0.1)
+            else:                            mechspecies = 'VROCP6ARO' # C* bin centered on 10^6 (v0.1)
         # any single-ring aromatics that have not been mapped by rules above
         else:                                mechspecies = 'XYL'      # xylenes and other aromatics (CRACMM2)
     
