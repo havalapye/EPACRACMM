@@ -50,10 +50,12 @@ def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None,mechanism=None):
     :type smiles_input: string
     :param koh: kOH
     :type koh: float
-    :param log10cstar:
+    :param log10cstar: volatility
     :type log10cstar: float
-    :param phase: This is used to label species that can exist in both gas and particle phases.
-    :type phase: Default is None, other options are "gas" and "particle"
+    :param phase: This is used to label species that can exist in both gas and particle phases. Behavior defaults to gas.
+    :type phase: Default is None, other options are "gas" and "particle". 
+    :param mechanism: Indicates mechanism to map to. Behavior defaults to CRACMM3.
+    :type mechanism: Default is None, other options are "CRACMM3" or "CRACMM3M".
     :returns: mechspecies (string) 
     '''
     
