@@ -21,14 +21,18 @@ Nash Skipper - updates for CRACMM2
     8. Add V or A to the start of ROC* species to indicate gas or particle phase.
     9. Add warning if input was not mapped to a CRACMM species (mapped to UNKCRACMM).
 
-Havala Pye - draft CRACMM3
-    Notes: CRACMM2 and CRACMM3 inputs are fully cross compatible
+Havala Pye - CRACMM3
+    Notes: CRACMM2 and CRACMM3 inputs are fully cross compatible in CMAQ 
+           (e.g., CRACMM2 inputs can be used in CRACMM3)
     1. Recast NAPH as explicit naphthalene rather than naphthalene and PAHs. 
-       Move PAHs to ROCP5ARO and ROCP6ARO.
-    2. Add optional argument for CRACMM version (meant for CRACMM3M).
+       Move PAHs to ROCP5ARO and ROCP6ARO and ROCALK series based on volatility.
+    2. Add optional argument for CRACMM version (meant for CRACMM3M and methyl iodide).
     3. Add CRACMM3M species CH3I.
     4. Make phenol explicit PHEN.
-
+    5. Change MCT mapping rule to catch resorcinol (6 aromatic C with 2 OH).
+    6. Remove redundant ROCARO rules for nbenzene>1 (PAHs).
+    7. Redefine VROCIOXY to be all siloxanes, S/IVOC ethers and alkyl carbamates, high O:C S/IVOCs.
+    8. Add canonical smiles checks to ensure consistency.
 """
 
 import warnings
@@ -95,6 +99,9 @@ def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None,mechanism=None):
     nalcohol  = rdkit.Chem.Fragments.fr_Al_OH(m,countUnique=True) + \
                   rdkit.Chem.Fragments.fr_Ar_OH(m,countUnique=True)      # aliphatic and aromatic
     nfuran    = rdkit.Chem.Fragments.fr_furan(m,countUnique=True) # number of furan rings
+    nether    = rdkit.Chem.Fragments.fr_ether(m,countUnique=True) # number of ether groups
+    ncarbamate = rdkit.Chem.Fragments.fr_alkyl_carbamate(m,countUnique=True)
+
     # gotring variable is never used so this could be removed
     #     it may be useful to keep it here commented out in case it is needed in the future
     #for atom in range(len(m.GetAtoms())):
@@ -109,42 +116,42 @@ def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None,mechanism=None):
 
     # Species unique to CRACMM3M
     if mechanism =='CRACMM3M': 
-        if ( smiles == 'CI'):         mechspecies = 'CH3I'
+        if ( smiles == Chem.CanonSmiles('CI') ):         mechspecies = 'CH3I'
 
     # Mapper is for ROC only and not elemental carbon
     if   ( nC <= 0 ):                 mechspecies = 'UNKCRACMM'
-    elif ( smiles == '[C]' ):         mechspecies = 'UNKCRACMM'
+    elif ( smiles == Chem.CanonSmiles('[C]') ):         mechspecies = 'UNKCRACMM'
     
     # Map CO to UNKCRACMM; CO will be mapped to SLOWROC if not handled explicitly
-    elif ( smiles == '[C-]#[O+]' ):   mechspecies = 'UNKCRACMM'
+    elif ( smiles == Chem.CanonSmiles('[C-]#[O+]') ):   mechspecies = 'UNKCRACMM'
     # The same applies to CO2
-    elif ( smiles == 'O=C=O' ):       mechspecies = 'UNKCRACMM'
+    elif ( smiles == Chem.CanonSmiles('O=C=O') ):       mechspecies = 'UNKCRACMM'
 
      # Explicit species
-    elif ( smiles == 'CC=O' ):        mechspecies = 'ACD'   # acetaldehyde
-    elif ( smiles == 'C#C' ):         mechspecies = 'ACE'   # acetylene
-    elif ( smiles == 'CC(C)=O' ):     mechspecies = 'ACT'   # acetone
+    elif ( smiles == Chem.CanonSmiles('CC=O') ):        mechspecies = 'ACD'   # acetaldehyde
+    elif ( smiles == Chem.CanonSmiles('C#C') ):         mechspecies = 'ACE'   # acetylene
+    elif ( smiles == Chem.CanonSmiles('CC(C)=O') ):     mechspecies = 'ACT'   # acetone
     elif ( nC==6 and nH==6 and nO==0 and nbenzene==1 ):
                                       mechspecies = 'BEN'   # benzene
-    elif ( smiles == 'C'  ):          mechspecies = 'ECH4'  # methane
-    elif ( smiles == 'CCO'):          mechspecies = 'EOH'   # ethanol
-    elif ( smiles == 'C=C'):          mechspecies = 'ETE'   # ethene aka ethylene
-    elif ( smiles == 'OCCO'):         mechspecies = 'ETEG'  # ethylene glycol
-    elif ( smiles == 'CC' ):          mechspecies = 'ETH'   # ethane
-    elif ( smiles == 'C=O'):          mechspecies = 'HCHO'  # formaldehyde
-    elif ( smiles == 'C=CC(=C)C' ):   mechspecies = 'ISO'   # isoprene (output of Chem.CanonSmiles)
-    elif ( smiles == 'CO'):           mechspecies = 'MOH'   # methanol
-    elif ( smiles == 'O=CO'):         mechspecies = 'ORA1'  # formic acid
-    elif ( smiles == 'COO'):          mechspecies = 'OP1'   # methyl hydrogen peroxide
-    elif ( smiles == 'C=Cc1ccccc1'):  mechspecies = 'STY'   # styrene (added in CRACMM2)
-    elif ( smiles == 'CCc1ccccc1'):   mechspecies = 'EBZ'   # ethylbenzene (added in CRACMM2)
-    elif ( smiles == 'CCC(C)=O' ):    mechspecies = 'MEK'   # methyl ethyl ketone
-    elif ( smiles == 'C=CC(C)=O' ):   mechspecies = 'MVK'   # methly vinyl ketone
-    elif ( smiles == 'Cc1ccccc1' ):   mechspecies = 'TOL'   # toluene
-    elif ( smiles == 'C=CC=C' ):      mechspecies = 'BDE13' # 1,3 butadiene   
-    elif ( smiles == 'C=CC=O' ):      mechspecies = 'ACRO'  # acrolein
-    elif ( smiles == 'C1=CC2=CC=CC=C2C=C1' ):  mechspecies = 'NAPH'  # naphthalene
-    elif ( smiles == 'OC1=CC=CC=C1' ):         mechspecies = 'PHEN'  # phenol
+    elif ( smiles == Chem.CanonSmiles('C') ):          mechspecies = 'ECH4'  # methane
+    elif ( smiles == Chem.CanonSmiles('CCO') ):          mechspecies = 'EOH'   # ethanol
+    elif ( smiles == Chem.CanonSmiles('C=C') ):          mechspecies = 'ETE'   # ethene aka ethylene
+    elif ( smiles == Chem.CanonSmiles('OCCO') ):         mechspecies = 'ETEG'  # ethylene glycol
+    elif ( smiles == Chem.CanonSmiles('CC') ):          mechspecies = 'ETH'   # ethane
+    elif ( smiles == Chem.CanonSmiles('C=O') ):          mechspecies = 'HCHO'  # formaldehyde
+    elif ( smiles == Chem.CanonSmiles('C=CC(=C)C') ):   mechspecies = 'ISO'   # isoprene (output of Chem.CanonSmiles)
+    elif ( smiles == Chem.CanonSmiles('CO') ):           mechspecies = 'MOH'   # methanol
+    elif ( smiles == Chem.CanonSmiles('O=CO') ):         mechspecies = 'ORA1'  # formic acid
+    elif ( smiles == Chem.CanonSmiles('COO') ):          mechspecies = 'OP1'   # methyl hydrogen peroxide
+    elif ( smiles == Chem.CanonSmiles('C=Cc1ccccc1')):  mechspecies = 'STY'   # styrene (added in CRACMM2)
+    elif ( smiles == Chem.CanonSmiles('CCc1ccccc1')):   mechspecies = 'EBZ'   # ethylbenzene (added in CRACMM2)
+    elif ( smiles == Chem.CanonSmiles('CCC(C)=O') ):    mechspecies = 'MEK'   # methyl ethyl ketone
+    elif ( smiles == Chem.CanonSmiles('C=CC(C)=O') ):   mechspecies = 'MVK'   # methly vinyl ketone
+    elif ( smiles == Chem.CanonSmiles('Cc1ccccc1') ):   mechspecies = 'TOL'   # toluene
+    elif ( smiles == Chem.CanonSmiles('C=CC=C') ):      mechspecies = 'BDE13' # 1,3 butadiene   
+    elif ( smiles == Chem.CanonSmiles('C=CC=O') ):      mechspecies = 'ACRO'  # acrolein
+    elif ( smiles == Chem.CanonSmiles('C1=CC2=CC=CC=C2C=C1') ):  mechspecies = 'NAPH'  # naphthalene
+    elif ( smiles == Chem.CanonSmiles('Oc1ccccc1') ):            mechspecies = 'PHEN'  # phenol
 
     # Glyoxal and glycoaldehyde (here due to solubility alt mappings: ACD, ETEG)
     elif ( nC==2 and nO==2 and naldehyde>=1 ):     
@@ -205,13 +212,10 @@ def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None,mechanism=None):
     # Single-ring aromatics (excluding explicit species)
     elif ( nbenzene > 0 ): # Single-ring aromatics
         if ( naldehyde > 0 ):                mechspecies = 'BALD'     # Benzaldehyde and arom. aldehydes
-        elif ( nC>=7 and nalcohol>=2 ):      mechspecies = 'MCT'      # methylcatechol
+        elif ( nalcohol>=2 ):                mechspecies = 'MCT'      # methylcatechol
         elif ( nalcohol>=1 ):                mechspecies = 'CSL'      # cresol
         elif ( log10cstar < 5.5 ):           mechspecies = 'VROCP5ARO' # C* bin centered on 10^5 (v0.1)
         elif ( log10cstar < 6.5 ):           mechspecies = 'VROCP6ARO' # C* bin centered on 10^6 (v0.1)
-        elif ( nbenzene > 1  ): 
-            if ( log10cstar < 5.5 ):         mechspecies = 'VROCP5ARO' # C* bin centered on 10^5 (v0.1)
-            else:                            mechspecies = 'VROCP6ARO' # C* bin centered on 10^6 (v0.1)
         # any single-ring aromatics that have not been mapped by rules above
         else:                                mechspecies = 'XYL'      # xylenes and other aromatics (CRACMM2)
     
@@ -236,26 +240,36 @@ def get_cracmm_roc(smiles_input,koh,log10cstar,phase=None,mechanism=None):
         else:                                  mechspecies = 'OLI'
     
     # IVOC species binned
-    elif ( ( log10cstar < 6.5 and nO/nC >= 0.1 ) or nSi > 0 ):  
-                                       mechspecies = 'VROCIOXY' # Oxygenated IVOCs and any silanes/siloxanes
+    elif ( log10cstar < 6.5 and ( nether > 0 or ncarbamate > 0) ) :
+        mechspecies = 'VROCIOXY' # silanes/siloxanes and ethers/carbamates
+    elif ( nSi > 0 ):  
+        mechspecies = 'VROCIOXY' # silanes/siloxanes and ethers/carbamates
     elif ( log10cstar < 3.5 ): # C* bin centered on 1000 ug/m3
-        if OtoC > 0.1:
+        if OtoC > 0.4:
+            mechspecies = 'VROCIOXY'
+        elif OtoC > 0.1:
             mechspecies = 'ROCP3OXY2'
         else:
             mechspecies = 'ROCP3ALK'
     # gas phase only for C* bins above 1000 ug/m3 so it can only be VROC (not AROC)
     elif ( log10cstar < 4.5 ): # C* bin centered on 10^4
-        if OtoC > 0.1:
+        if OtoC > 0.4:
+            mechspecies = 'VROCIOXY'
+        elif OtoC > 0.1:
             mechspecies = 'VROCP4OXY2'
         else:
             mechspecies = 'VROCP4ALK'
     elif ( log10cstar < 5.5 ): # C* bin centered on 10^5
-        if OtoC > 0.05:
+        if OtoC > 0.2:
+            mechspecies = 'VROCIOXY'
+        elif OtoC > 0.05:
             mechspecies = 'VROCP5OXY1'
         else:
             mechspecies = 'VROCP5ALK'
     elif ( log10cstar < 6.5 ): # C* bin centered on 10^6
-        if OtoC > 0.05:
+        if OtoC > 0.2:
+            mechspecies = 'VROCIOXY'
+        elif OtoC > 0.05:
             mechspecies = 'VROCP6OXY1'
         else:
             mechspecies = 'VROCP6ALK'
